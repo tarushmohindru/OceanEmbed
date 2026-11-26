@@ -1,0 +1,37 @@
+# --- data: keep only the specs ---
+data/raw/*
+!data/raw/IMPLEMENTATION.md
+data/interim/*
+!data/interim/IMPLEMENTATION.md
+data/processed/*
+!data/processed/IMPLEMENTATION.md
+
+# --- results: keep specs, small tables and figures; drop heavy artefacts ---
+results/runs/*/*.pt
+results/predictions/
+results/probe/raw/
+results/logs/
+deliverables/
+
+# --- credentials ---
+.netrc
+_netrc
+*.env
+.env*
+.copernicusmarine/
+
+# --- python / tooling ---
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+*.egg-info/
+.venv/
+venv/
+
+# --- OS / editors ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

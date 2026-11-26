@@ -1,0 +1,161 @@
+# ---------------- project ----------------
+project: oceanembed
+seed: 42
+
+paths:
+  data_root: data            # raw/, interim/, processed/ live under this
+  results_root: results
+
+# ---------------- space & time ----------------
+region:                      # Default (deck: "Bay of Bengal or Arabian Sea")
+  name: bay_of_bengal
+  lat_min: 5.0
+  lat_max: 23.0
+  lon_min: 80.0
+  lon_max: 100.0
+download_buffer_deg: 1.0     # extra margin downloaded around the box
+grid_res: 0.25               # Decision
+
+dates:                       # Default; quoted so YAML keeps them as strings
+  start: "2016-01-01"
+  end: "2022-12-31"
+
+splits:                      # Default; by whole years. Inclusive year ranges.
+  train: [2016, 2020]
+  val: [2021, 2021]
+  test: [2022, 2022]
+  gap_days: 15               # first N days of val and test are dropped
+
+depths_m: [0, 10, 20, 30, 50, 75, 100, 125, 150, 200, 300, 400, 500, 700, 1000]  # Default
+depth_bands_m:               # used for aggregated tables (inclusive membership by value)
+  "0-100": [0, 10, 20, 30, 50, 75, 100]
+  "100-300": [125, 150, 200, 300]
+  "300-1000": [400, 500, 700, 1000]
+
+# ---------------- inputs ----------------
+inputs: [sst, sss, sla, u_cur, v_cur, u_wind, v_wind]   # Decision: order = channel order
+channels:                    # channel -> (product, variable in raw file)
+  sst:    {product: ostia, variable: analysed_sst}      # VERIFY variable name
+  sss:    {product: smap,  variable: sss_smap}          # VERIFY variable name
+  sla:    {product: duacs, variable: sla}               # VERIFY
+  u_cur:  {product: oscar, variable: u}                 # VERIFY
+  v_cur:  {product: oscar, variable: v}                 # VERIFY
+  u_wind: {product: ccmp,  variable: uwnd}              # VERIFY
+  v_wind: {product: ccmp,  variable: vwnd}              # VERIFY
+extra_inputs:                # ablations only; all false in the core experiment
+  land_mask: false
+  doy_sincos: false
+  latlon: false
+
+# ---------------- products ----------------
+# streams are tried in order; for each date the first stream that has it is used.
+products:
+  glorys:
+    source: copernicusmarine
+    streams:
+      - {name: my,    dataset_id: cmems_mod_glo_phy_my_0.083deg_P1D-m}       # VERIFY
+      - {name: myint, dataset_id: cmems_mod_glo_phy_myint_0.083deg_P1D-m}    # VERIFY
+    variables: [thetao]
+    depth_range_m: [0.0, 1100.0]
+  ostia:
+    source: copernicusmarine
+    streams:
+      - {name: rep, dataset_id: METOFFICE-GLO-SST-L4-REP-OBS-SST}            # VERIFY
+      - {name: nrt, dataset_id: METOFFICE-GLO-SST-L4-NRT-OBS-SST-V2}         # VERIFY
+    variables: [analysed_sst]
+  duacs:
+    source: copernicusmarine
+    streams:
+      - {name: my,    dataset_id: cmems_obs-sl_glo_phy-ssh_my_allsat-l4-duacs-0.125deg_P1D}     # VERIFY id and resolution
+      - {name: myint, dataset_id: cmems_obs-sl_glo_phy-ssh_myint_allsat-l4-duacs-0.125deg_P1D}  # VERIFY
+    variables: [sla]
+  oscar:
+    source: earthaccess
+    streams:
+      - {name: final,   short_name: OSCAR_L4_OC_FINAL_V2.0}                  # VERIFY coverage end
+      - {name: interim, short_name: OSCAR_L4_OC_INTERIM_V2.0}                # VERIFY
+    variables: [u, v]
+  smap:
+    source: earthaccess
+    streams:
+      - {name: rss, short_name: SMAP_RSS_L3_SSS_SMI_8DAY-RUNNINGMEAN_V6}      # VERIFY; one product for the whole period
+    variables: [sss_smap]
+  ccmp:
+    source: http
+    streams:
+      - {name: v3.1, url_template: "https://data.remss.com/ccmp/v03.1/Y{yyyy}/M{mm}/CCMP_Wind_Analysis_{yyyy}{mm}{dd}_V03.1_L4.nc"}  # VERIFY
+    variables: [uwnd, vwnd]
+  argo:
+    source: argopy
+    fetch_years: [2022]      # test years only
+    argopy_src: erddap       # fallback: gdac
+    max_depth_m: 1100
+
+# ---------------- preprocessing ----------------
+preprocess:
+  qc_ranges:                 # values outside -> NaN, then gap-filled
+    sst: [10.0, 36.0]
+    sss: [5.0, 40.0]
+    sla: [-1.5, 1.5]
+    u_cur: [-3.0, 3.0]
+    v_cur: [-3.0, 3.0]
+    u_wind: [-40.0, 40.0]
+    v_wind: [-40.0, 40.0]
+  max_interp_gap_days: 3
+  clim_window_days: 31       # centred, circular smoothing of day-of-year climatologies
+  conservative_na_thres: 0.5 # min valid source-area fraction for a target cell to be valid
+  ocean_valid_fraction: 0.99 # cell is ocean if valid on >= this fraction of days
+  keep_largest_ocean_component: true
+  glorys_top_level_max_m: 1.0  # shallowest GLORYS level (0.494 m) is used as "0 m" if shallower than this
+
+# ---------------- model ----------------
+model:
+  name: vit_cnn              # vit_cnn | cnn_unet
+  patch: 8                   # must be a power of two
+  dim: 256
+  depth: 6
+  heads: 8
+  mlp_ratio: 4
+  dropout: 0.1
+  stem_base_channels: 32     # skip stem channels = base * 2**i
+  use_skip_stem: true        # ablation: false
+cnn:
+  base_channels: auto        # auto -> choose so params within 10% of vit_cnn
+
+# ---------------- training ----------------
+train:
+  batch: 16
+  lr: 3.0e-4                 # keep the ".0": PyYAML reads "3e-4" as a string
+  wd: 0.05
+  epochs: 100
+  warmup_epochs: 5
+  min_lr: 1.0e-6
+  patience: 15
+  grad_clip: 1.0
+  grad_lambda: 0.1
+  depth_weights: uniform     # uniform | thermocline | variance
+  thermocline_weight: 2.0    # used when depth_weights == thermocline, for 50-200 m
+  target_mode: absolute      # absolute | anomaly
+  amp: auto                  # auto | bf16 | fp16 | off
+  gpu_resident: true
+  smoke: false               # true -> tiny subset, 2 epochs (see src/training)
+  drop_inputs: []            # ablation: channel names removed from x (e.g. [sss])
+
+# ---------------- evaluation ----------------
+eval:
+  seasons:                   # Default: Indian monsoon seasons (months)
+    winter_monsoon: [12, 1, 2]
+    pre_monsoon: [3, 4, 5]
+    summer_monsoon: [6, 7, 8, 9]
+    post_monsoon: [10, 11]
+  map_depths_m: [0, 100, 500]
+  bootstrap: {n: 1000, block_days: 30, ci: 0.95}
+  argo:
+    qc_ok: [1, 2]
+    data_modes: [D, A, R]    # preference order
+    surface_max_depth_m: 10.0
+    max_bracket_gap_m:       # max distance between the two bracketing measurements
+      - {upto_m: 100,  gap_m: 25}
+      - {upto_m: 300,  gap_m: 50}
+      - {upto_m: 700,  gap_m: 100}
+      - {upto_m: 1000, gap_m: 200}

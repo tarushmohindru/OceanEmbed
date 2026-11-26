@@ -1,0 +1,30 @@
+name: oceanembed
+channels: [conda-forge]
+dependencies:
+  - python=3.11
+  - numpy
+  - scipy
+  - pandas
+  - xarray
+  - dask
+  - netcdf4
+  - h5netcdf
+  - zarr
+  - xesmf
+  - esmpy
+  - cf_xarray
+  - cartopy
+  - matplotlib
+  - scikit-learn
+  - gsw
+  - pyyaml
+  - tqdm
+  - requests
+  - pytest
+  - ruff
+  - pip
+  - pip:
+      - copernicusmarine
+      - earthaccess
+      - argopy
+      # torch is installed separately, see IMPLEMENTATION.md section 7.1

@@ -1,0 +1,10 @@
+# Code is written on Windows and run on Linux (Lightning.ai).
+* text=auto eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+*.png binary
+*.pt binary
+*.nc binary
