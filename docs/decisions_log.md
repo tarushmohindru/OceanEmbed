@@ -37,3 +37,12 @@
 - **Why:** the user asked for a Streamlit frontend; the 1-day deadline leaves no GPU time for the full experiment matrix.
 - **Impact:** results compare the two architectures at one lambda; the sweep can be run later with `python -m src.training.sweep --set-name lambda`.
 - **Model sizes:** ViT-CNN 5,941,199 parameters; CNN U-Net 5,711,151 (base 48), ratio 0.961.
+
+## 2026-11-27 — Probe STOP decisions (made by the agent, delegated by the user)
+
+- **GLORYS:** stream `my` (`cmems_mod_glo_phy_my_0.083deg_P1D-m`) covers 2016-01-01..2022-12-31, so the whole period comes from one stream; `myint` (absent from the catalogue) is never used. Shallowest level 0.494 m (<= 1 m), OK.
+- **OSTIA:** `rep` covers the full period. **DUACS:** `my` 0.125 deg covers the full period. **SMAP, CCMP v3.1:** full period.
+- **OSCAR:** the probe could not download a sample (Earthdata session not loaded at the time); credentials verified afterwards (`earthaccess` authenticated). Proceeding; if OSCAR fails in the real download, `u_cur`/`v_cur` will be dropped via `train.drop_inputs` and that will be logged here.
+- **ARGO:** only the test year (2022) is fetched for the independent check.
+- Grids as delivered (lon 0..180 / 0..360, lat ascending) are handled by `standardize_coords`; units (OSTIA K, DUACS m, SMAP psu as 1e-3) by `readers._convert_units`.
+- `results/probe/APPROVED` created on the Studio on 2026-11-26 20:53 UTC.
