@@ -321,7 +321,9 @@ def test_probe_planning_and_report(cfg):
     assert plan["glorys"]["switches"] == [
         {"date": "2021-07-01", "from": "my", "to": "myint", "split": "val"}
     ]
-    assert plan["oscar"]["n_uncovered"] == len(pd.date_range(cfg["dates"]["start"], cfg["dates"]["end"]))
+    assert plan["oscar"]["n_uncovered"] == len(
+        pd.date_range(cfg["dates"]["start"], cfg["dates"]["end"])
+    )
     assert probe["extension"]["latest_common_end"] is None
     assert probe["sizes"]["glorys"]["gb"] > 0
     rows = verify_rows(cfg, probe, plan, "x: 1  # VERIFY\n")
