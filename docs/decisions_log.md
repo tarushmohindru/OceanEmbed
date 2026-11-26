@@ -30,3 +30,10 @@
 - **Why:** time constraint.
 - **Evidence:** user instruction, 2026-11-27.
 - **Impact:** `results/probe/APPROVED` is created by the agent after the decisions are logged.
+
+## 2026-11-27 — Streamlit frontend and core-only training (deviation)
+
+- **Decision:** add `app/streamlit_app.py` (maps of model vs GLORYS and error, profiles, metrics) and `scripts/run_app.sh`; `train_all.sh` trains only the core pair (`cnn_unet_core`, `vit_cnn_core`) at the config `grad_lambda`, skipping the lambda sweep, seeds and ablations.
+- **Why:** the user asked for a Streamlit frontend; the 1-day deadline leaves no GPU time for the full experiment matrix.
+- **Impact:** results compare the two architectures at one lambda; the sweep can be run later with `python -m src.training.sweep --set-name lambda`.
+- **Model sizes:** ViT-CNN 5,941,199 parameters; CNN U-Net 5,711,151 (base 48), ratio 0.961.

@@ -27,6 +27,7 @@ else
   # argopy < 1.5 imports a private erddapy helper that recent erddapy releases removed;
   # argopy 1.5.0 (verified to import cleanly with erddapy 3.3.2) does not.
   run $PY -m pip install --upgrade "argopy>=1.5.0"
+  run $PY -m pip install streamlit plotly
   if ! $PY -c "import torch" 2>/dev/null; then
     log "torch not found; installing the default Linux wheel (CUDA-enabled)"
     run $PY -m pip install torch
