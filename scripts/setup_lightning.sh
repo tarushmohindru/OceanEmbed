@@ -24,6 +24,9 @@ else
   run $PY -m pip install numpy scipy pandas xarray dask netcdf4 h5netcdf zarr cf_xarray \
       matplotlib scikit-learn gsw pyyaml tqdm requests pytest ruff cartopy \
       copernicusmarine earthaccess argopy
+  # argopy < 1.5 imports a private erddapy helper that recent erddapy releases removed;
+  # argopy 1.5.0 (verified to import cleanly with erddapy 3.3.2) does not.
+  run $PY -m pip install --upgrade "argopy>=1.5.0"
   if ! $PY -c "import torch" 2>/dev/null; then
     log "torch not found; installing the default Linux wheel (CUDA-enabled)"
     run $PY -m pip install torch
@@ -71,6 +74,13 @@ for product in ("glorys", "oscar", "ccmp"):
         print(f"ok   credentials for {product}")
     except RuntimeError as e:
         print(f"MISSING {e}")
+
+try:
+    from src.download.common import verify_copernicus_login
+    verify_copernicus_login()
+    print("ok   copernicusmarine login accepted by the server")
+except Exception as e:  # noqa: BLE001
+    print(f"FAIL copernicusmarine login: {e}")
 
 try:
     import copernicusmarine

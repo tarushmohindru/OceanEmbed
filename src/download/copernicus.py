@@ -23,6 +23,7 @@ from src.download.common import (
     register_file,
     retry,
     tool_version,
+    verify_copernicus_login,
 )
 
 log = get_logger(__name__)
@@ -137,6 +138,7 @@ def download_product(
     if product not in PRODUCTS:
         raise ValueError(f"{product} is not a Copernicus Marine product")
     check_credentials(product)
+    verify_copernicus_login()
     probe = load_probe(paths)
     streams = {s["name"]: s for s in cfg["products"][product]["streams"]}
     for entry in plan_year_files(cfg, product, probe, years):

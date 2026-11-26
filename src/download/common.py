@@ -317,6 +317,28 @@ def check_credentials(product: str) -> None:
     # ccmp and argo need no credentials
 
 
+@functools.lru_cache(maxsize=1)
+def verify_copernicus_login() -> None:
+    """Fail fast if the Copernicus Marine username/password are rejected (no retries).
+
+    ``check_credentials`` only tests that credentials exist; this asks the server.
+    """
+    import copernicusmarine
+
+    user = os.environ.get("COPERNICUSMARINE_SERVICE_USERNAME")
+    pwd = os.environ.get("COPERNICUSMARINE_SERVICE_PASSWORD")
+    kwargs = {"username": user, "password": pwd} if user and pwd else {}
+    try:
+        ok = copernicusmarine.login(check_credentials_valid=True, **kwargs)
+    except Exception as e:  # noqa: BLE001 - toolbox raises several auth exception types
+        raise RuntimeError(f"Copernicus Marine login check failed: {type(e).__name__}") from None
+    if not ok:
+        raise RuntimeError(
+            "Copernicus Marine rejected the credentials. Use the account USERNAME (not the "
+            "e-mail), check the password, and export both variables in this terminal."
+        )
+
+
 def tool_version(package: str) -> dict:
     """``{package: version}`` or ``{package: "unknown"}``."""
     from importlib import metadata

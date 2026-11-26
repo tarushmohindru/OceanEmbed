@@ -25,6 +25,7 @@ from src.download.common import (
     download_bbox,
     stream_date_ranges,
     tool_version,
+    verify_copernicus_login,
 )
 
 log = get_logger(__name__)
@@ -406,6 +407,7 @@ def probe_cm_stream(cfg: Config, paths: Paths, product: str, stream: dict) -> di
     rec: dict = {"dataset_id": stream["dataset_id"], "ok": False, "samples": []}
     try:
         rec.update(describe_cm(stream["dataset_id"]))
+        verify_copernicus_login()  # fail fast instead of retrying a bad password
         depth = tuple(pcfg["depth_range_m"]) if "depth_range_m" in pcfg else None
         for d in _sample_dates(cfg, rec):
             out = paths.probe_dir / "raw" / f"{product}_{stream['name']}_{d:%Y%m%d}.nc"
