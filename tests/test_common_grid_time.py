@@ -93,7 +93,20 @@ def test_doy_same_slot_across_years():
     )
 
 
+def _default_period(cfg):
+    """The spec's reference period 2016-2022 (config.yaml may use a shorter one)."""
+    import copy
+
+    from src.common.config import Config
+
+    raw = copy.deepcopy(cfg.raw)
+    raw["dates"]["start"] = "2016-01-01"
+    raw["splits"]["train"] = [2016, 2020]
+    return Config(raw=raw, path=cfg.path)
+
+
 def test_split_counts(cfg):
+    cfg = _default_period(cfg)
     s = split_of(daily_index(cfg), cfg)
     counts = pd.Series(s).value_counts().to_dict()
     assert counts == {"train": 1827, "val": 350, "test": 350, "gap": 30}
@@ -105,7 +118,7 @@ def test_split_counts(cfg):
 
 
 def test_years_and_seasons(cfg):
-    assert years_of_split(cfg, "train") == [2016, 2017, 2018, 2019, 2020]
+    assert years_of_split(_default_period(cfg), "train") == [2016, 2017, 2018, 2019, 2020]
     seasons = season_of(
         pd.to_datetime(["2022-01-10", "2022-04-01", "2022-07-01", "2022-11-30"]), cfg
     )

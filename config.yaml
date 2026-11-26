@@ -17,11 +17,11 @@ download_buffer_deg: 1.0     # extra margin downloaded around the box
 grid_res: 0.25               # Decision
 
 dates:                       # Default; quoted so YAML keeps them as strings
-  start: "2016-01-01"
+  start: "2018-01-01"         # 1-day deadline: shortened from 2016 (docs/decisions_log.md)
   end: "2022-12-31"
 
 splits:                      # Default; by whole years. Inclusive year ranges.
-  train: [2016, 2020]
+  train: [2018, 2020]
   val: [2021, 2021]
   test: [2022, 2022]
   gap_days: 15               # first N days of val and test are dropped
@@ -127,10 +127,10 @@ train:
   batch: 16
   lr: 3.0e-4                 # keep the ".0": PyYAML reads "3e-4" as a string
   wd: 0.05
-  epochs: 100
-  warmup_epochs: 5
+  epochs: 40                 # 1-day deadline (was 100)
+  warmup_epochs: 3
   min_lr: 1.0e-6
-  patience: 15
+  patience: 10
   grad_clip: 1.0
   grad_lambda: 0.1
   depth_weights: uniform     # uniform | thermocline | variance

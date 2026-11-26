@@ -55,12 +55,12 @@ def test_stream_date_ranges_first_wins(cfg):
     })  # fmt: skip
     runs = stream_date_ranges(cfg, "glorys", probe)
     assert [(s, a.date().isoformat(), b.date().isoformat()) for s, a, b in runs] == [
-        ("my", "2016-01-01", "2021-06-30"),
+        ("my", cfg["dates"]["start"], "2021-06-30"),
         ("myint", "2021-07-01", "2022-12-31"),
     ]
     # no gaps, no overlaps
     days = [d for _, a, b in runs for d in pd.date_range(a, b)]
-    assert len(days) == len(set(days)) == len(pd.date_range("2016-01-01", "2022-12-31"))
+    assert len(days) == len(set(days)) == len(pd.date_range(cfg["dates"]["start"], "2022-12-31"))
 
 
 def test_stream_date_ranges_gap_and_missing_stream(cfg):
@@ -321,7 +321,7 @@ def test_probe_planning_and_report(cfg):
     assert plan["glorys"]["switches"] == [
         {"date": "2021-07-01", "from": "my", "to": "myint", "split": "val"}
     ]
-    assert plan["oscar"]["n_uncovered"] == 2557
+    assert plan["oscar"]["n_uncovered"] == len(pd.date_range(cfg["dates"]["start"], cfg["dates"]["end"]))
     assert probe["extension"]["latest_common_end"] is None
     assert probe["sizes"]["glorys"]["gb"] > 0
     rows = verify_rows(cfg, probe, plan, "x: 1  # VERIFY\n")
