@@ -45,6 +45,22 @@ def login_earthdata() -> None:
         raise RuntimeError("Earthdata login failed (check EARTHDATA_USERNAME/PASSWORD or ~/.netrc)")
 
 
+_NONSTANDARD = {"julian", "noleap", "365_day", "all_leap", "366_day", "360_day"}
+
+
+def decode_time_standard(ds: xr.Dataset) -> xr.Dataset:
+    """Decode times; a non-standard calendar label is treated as standard.
+
+    OSCAR v2 labels its time axis "julian" although "days since 1990-1-1" with the standard
+    calendar reproduces the file-name dates exactly (10228 -> 2018-01-02), so the label is
+    overridden instead of producing cftime objects.
+    """
+    if "time" in ds.variables and str(ds["time"].attrs.get("calendar", "")).lower() in _NONSTANDARD:
+        ds = ds.copy()
+        ds["time"].attrs["calendar"] = "standard"
+    return xr.decode_cf(ds)
+
+
 def crop_granule(
     src: Path, out: Path, variables: list[str], bbox, t0: pd.Timestamp, t1: pd.Timestamp
 ) -> bool:
@@ -53,8 +69,8 @@ def crop_granule(
     Variables are transposed to ``(time, lat, lon)`` by name. Returns False if no time of the
     granule falls inside the range (nothing written).
     """
-    with xr.open_dataset(src) as raw:
-        ds = crop_to_bbox(raw, bbox)
+    with xr.open_dataset(src, decode_times=False) as raw:
+        ds = crop_to_bbox(decode_time_standard(raw), bbox)
         missing = [v for v in variables if v not in ds.data_vars]
         if missing:
             raise KeyError(f"{src.name}: variables {missing} not found; has {list(ds.data_vars)}")

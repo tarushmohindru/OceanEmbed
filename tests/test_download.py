@@ -338,3 +338,30 @@ def test_probe_planning_and_report(cfg):
     assert "inside the test period" in render_report(cfg, probe, "")
     assert estimate_sizes(cfg, probe, probe["coverage_plan"])["glorys"]["gb"] > 0
     assert extension_option(cfg, probe)["per_product_end"]["glorys"] == "2024-12-31"
+
+
+def test_oscar_like_granule_crops(tmp_path):
+    """lat/lon on dims latitude/longitude, lon 0..360, time labelled julian."""
+    import numpy as np
+    import pandas as pd
+    import xarray as xr
+
+    from src.download.earthdata import crop_granule
+
+    lat = np.arange(-89.75, 90, 0.25)
+    lon = np.arange(0, 360, 0.25)
+    u = np.zeros((1, lon.size, lat.size), "f4")
+    ds = xr.Dataset(
+        {"u": (("time", "longitude", "latitude"), u), "v": (("time", "longitude", "latitude"), u)},
+        coords={"lat": ("latitude", lat), "lon": ("longitude", lon), "time": ("time", [10228.0])},
+    )
+    ds["time"].attrs.update(units="days since 1990-1-1", calendar="julian")
+    src = tmp_path / "oscar_currents_final_20180102.nc"
+    ds.to_netcdf(src)
+    out = tmp_path / "out.nc"
+    day = pd.Timestamp("2018-01-02")
+    assert crop_granule(src, out, ["u", "v"], (79.0, 4.0, 101.0, 24.0), day, day)
+    with xr.open_dataset(out) as r:
+        assert r["u"].dims == ("time", "lat", "lon")
+        assert pd.Timestamp(r["time"].values[0]) == day
+        assert float(r.lon.min()) >= 79 and float(r.lat.max()) <= 24

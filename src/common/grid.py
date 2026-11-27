@@ -110,6 +110,13 @@ def standardize_coords(ds: xr.Dataset) -> xr.Dataset:
     }
     if rename:
         ds = ds.rename(rename)
+    # 1-D lat/lon coordinates living on differently named dims (e.g. OSCAR: lat(latitude)).
+    for name in ("lat", "lon"):
+        if name in ds.variables and ds[name].ndim == 1 and ds[name].dims[0] != name:
+            dim = ds[name].dims[0]
+            ds = ds.swap_dims({dim: name})
+            if dim in ds.variables:
+                ds = ds.drop_vars(dim)
     if "lon" in ds.coords:
         wrapped = ((ds["lon"] + 180.0) % 360.0) - 180.0
         ds = ds.assign_coords(lon=wrapped.astype(ds["lon"].dtype))
