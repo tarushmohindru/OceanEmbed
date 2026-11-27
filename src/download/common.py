@@ -131,18 +131,21 @@ def crop_to_bbox(ds: xr.Dataset, bbox: tuple[float, float, float, float]) -> xr.
 def concat_daily(files: list[Path], out: Path, product: str, stream: str) -> None:
     """Concatenate cropped files on ``time`` (later files win duplicates), write, delete inputs.
 
-    Lazy (dask, one day per chunk) so a GLORYS year (several GB decoded) never sits in memory.
+    Lazy (dask, one chunk per input file) so a GLORYS year (several GB decoded) never sits in
+    memory at once; reordering only happens when the inputs overlap or are out of order.
     """
     if not files:
         raise ValueError("concat_daily: no input files")
-    parts = [xr.open_dataset(f, chunks={"time": 1}) for f in files]
+    parts = [xr.open_dataset(f, chunks={"time": -1}) for f in files]
     try:
         ds = xr.concat(parts, dim="time", data_vars="minimal", coords="minimal",
                        compat="override", join="override")  # fmt: skip
-        order = np.argsort(ds.indexes["time"].values, kind="stable")
-        ds = ds.isel(time=order)  # stable: among equal times the later input stays last
-        keep = ~ds.indexes["time"].duplicated(keep="last")
-        ds = ds.isel(time=np.flatnonzero(keep))
+        idx = ds.indexes["time"]
+        if not (idx.is_monotonic_increasing and idx.is_unique):
+            order = np.argsort(idx.values, kind="stable")  # later input stays last among equals
+            ds = ds.isel(time=order)
+            keep = ~ds.indexes["time"].duplicated(keep="last")
+            ds = ds.isel(time=np.flatnonzero(keep))
         ds.attrs.update({"product": product, "stream": stream})
         write_netcdf(ds, out)
     finally:
