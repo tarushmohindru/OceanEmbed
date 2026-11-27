@@ -58,12 +58,23 @@ def atomic_write_path(final: Path) -> Iterator[Path]:
 
 
 def write_netcdf(ds: xr.Dataset, path: Path) -> None:
-    """Write NetCDF4 with zlib level 4 on float variables, atomically."""
-    enc = {
-        v: {"zlib": True, "complevel": 4}
-        for v in ds.data_vars
-        if np.issubdtype(ds[v].dtype, np.floating)
-    }
+    """Write NetCDF4 with zlib level 4 on float variables, atomically.
+
+    Variables with a ``time`` dim are chunked one time step x the full remaining shape; the
+    chunking inherited from source files (often tiny) made compressed 4-D writes crawl.
+    """
+    ds = ds.copy()  # encoding edits below must not leak to the caller
+    enc = {}
+    for v in ds.data_vars:
+        if not np.issubdtype(ds[v].dtype, np.floating):
+            continue
+        e = {"zlib": True, "complevel": 4}
+        if "time" in ds[v].dims and ds[v].ndim >= 2:
+            e["chunksizes"] = tuple(1 if d == "time" else ds.sizes[d] for d in ds[v].dims)
+        enc[v] = e
+        ds[v].encoding.pop("chunksizes", None)
+        ds[v].encoding.pop("preferred_chunks", None)
+        ds[v].encoding.pop("contiguous", None)
     with atomic_write_path(path) as tmp:
         ds.to_netcdf(tmp, engine="netcdf4", format="NETCDF4", encoding=enc)
 
