@@ -86,7 +86,7 @@ def regrid_inputs_year(cfg: Config, paths: Paths, year: int, force: bool,
             any_valid = np.isfinite(arr).any(axis=0)
             frac = np.isnan(arr[:, any_valid]).mean() if any_valid.any() else 1.0
             log.info("%s %d: NaN fraction over ever-valid cells %.4f", ch, year, frac)
-        streams = sorted({s for s in field.provenance["stream"] if s})
+        streams = _streams(field.provenance)
         out_ds = xr.Dataset(
             data_vars,
             coords={"time": ds["time"].values, "lat": grid.lat, "lon": grid.lon},
@@ -96,6 +96,11 @@ def regrid_inputs_year(cfg: Config, paths: Paths, year: int, force: bool,
         _assert_interim(out_ds, cfg, year)
         write_netcdf(out_ds, out)
         field.provenance.to_csv(paths.interim_provenance(product, year), index=False)
+
+
+def _streams(provenance) -> list[str]:
+    """Sorted stream names used; days without data carry NaN and are skipped."""
+    return sorted({s for s in provenance["stream"] if isinstance(s, str) and s})
 
 
 def regrid_glorys_year(cfg: Config, paths: Paths, year: int, force: bool) -> None:
@@ -123,7 +128,7 @@ def regrid_glorys_year(cfg: Config, paths: Paths, year: int, force: bool) -> Non
                                                           "long_name": "potential temperature"})},
         coords={"time": times.values, "depth": ds["depth"].values.astype("f8"),
                 "lat": grid.lat, "lon": grid.lon},
-        attrs={"source_streams": ",".join(sorted({s for s in field.provenance["stream"] if s})),
+        attrs={"source_streams": ",".join(_streams(field.provenance)),
                "regrid_method": r.method},
     )  # fmt: skip
     _assert_interim(out_ds, cfg, year)
