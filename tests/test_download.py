@@ -365,3 +365,38 @@ def test_oscar_like_granule_crops(tmp_path):
         assert r["u"].dims == ("time", "lat", "lon")
         assert pd.Timestamp(r["time"].values[0]) == day
         assert float(r.lon.min()) >= 79 and float(r.lat.max()) <= 24
+
+
+def test_granule_date_patterns():
+    import pandas as pd
+
+    from src.download.earthdata import granule_date
+
+    assert granule_date("RSS_smap_SSS_L3_8day_running_2018_005_FNL_v05.0.nc") == pd.Timestamp(
+        "2018-01-05"
+    )
+    assert granule_date("oscar_currents_final_20180102.nc") == pd.Timestamp("2018-01-02")
+    assert granule_date("nothing_here.nc") is None
+
+
+def test_smap_like_granule_without_time_axis(tmp_path):
+    import numpy as np
+    import pandas as pd
+    import xarray as xr
+
+    from src.download.earthdata import crop_granule
+
+    lat = np.arange(-89.875, 90, 0.25)
+    lon = np.arange(0.125, 360, 0.25)
+    z = np.zeros((lat.size, lon.size), "f4")
+    ds = xr.Dataset({"sss_smap": (("lat", "lon"), z), "time": (("lat", "lon"), z.astype("f8"))},
+                    coords={"lat": lat, "lon": lon})  # fmt: skip
+    ds["time"].attrs["units"] = "seconds since 2000-01-01"
+    src = tmp_path / "RSS_smap_SSS_L3_8day_running_2018_005_FNL_v05.0.nc"
+    ds.to_netcdf(src)
+    out = tmp_path / "o.nc"
+    day = pd.Timestamp("2018-01-05")
+    assert crop_granule(src, out, ["sss_smap"], (79.0, 4.0, 101.0, 24.0), day, day)
+    with xr.open_dataset(out) as r:
+        assert r["sss_smap"].dims == ("time", "lat", "lon")
+        assert pd.Timestamp(r.time.values[0]) == day

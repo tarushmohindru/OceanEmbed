@@ -5,6 +5,7 @@ Global daily granules are cropped to the region+buffer immediately and deleted.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -61,6 +62,17 @@ def decode_time_standard(ds: xr.Dataset) -> xr.Dataset:
     return xr.decode_cf(ds)
 
 
+def granule_date(name: str) -> pd.Timestamp | None:
+    """Date from a granule file name: ``..._YYYY_DDD_...`` (year, day of year) or ``YYYYMMDD``."""
+    m = re.search(r"(?<!\d)((?:19|20)\d{2})_(\d{3})(?!\d)", name)
+    if m:
+        return pd.Timestamp(year=int(m.group(1)), month=1, day=1) + pd.Timedelta(
+            days=int(m.group(2)) - 1
+        )
+    m = re.search(r"(?<!\d)((?:19|20)\d{6})(?!\d)", name)
+    return pd.Timestamp(m.group(1)) if m else None
+
+
 def crop_granule(
     src: Path, out: Path, variables: list[str], bbox, t0: pd.Timestamp, t1: pd.Timestamp
 ) -> bool:
@@ -76,7 +88,13 @@ def crop_granule(
             raise KeyError(f"{src.name}: variables {missing} not found; has {list(ds.data_vars)}")
         ds = ds[variables]
         if "time" not in ds.dims:
-            ds = ds.expand_dims("time")
+            # e.g. RSS SMAP L3: no time axis, ``time`` holds per-pixel observation times.
+            if "time" in ds.variables:
+                ds = ds.drop_vars("time")
+            day = granule_date(src.name)
+            if day is None:
+                raise ValueError(f"{src.name}: no time axis and no date in the file name")
+            ds = ds.expand_dims(time=[day])
         ds = ds.transpose("time", "lat", "lon", ...)
         days = floor_to_date(ds["time"].values)
         keep = (days >= t0) & (days <= t1)
