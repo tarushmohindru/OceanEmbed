@@ -56,7 +56,7 @@ def run_sanity(cfg: Config, paths: Paths, figures: bool = True) -> list[tuple[st
         prov = pd.read_csv(paths.provenance)
         split = dict(zip(dates["date"], dates["split"], strict=True))
         for product, g in prov.groupby("product"):
-            g = g.sort_values("date")
+            g = g.dropna(subset=["stream"]).sort_values("date")  # NaN = day without data
             sw = g[g["stream"] != g["stream"].shift()].iloc[1:]
             for _, r in sw.iterrows():
                 sp = split.get(r["date"], "none")
