@@ -1,7 +1,8 @@
 """Pack what the Streamlit app needs into one zip, to run the app on another machine.
 
-Includes results/predictions/*/<split>.zarr, results/metrics/<split>/, and data/processed/Y_degC.zarr
-cut to the days of those splits. Extract the zip at the repo root of the other copy.
+Includes results/predictions/*/<split>.zarr, results/metrics/<split>/ and
+data/processed/Y_degC.zarr cut to the days of those splits.
+Extract the zip at the repo root of the other copy.
 
 Usage: python scripts/pack_app_data.py --config config.yaml [--splits test val] [--out app_data.zip]
 """
@@ -33,7 +34,8 @@ def main() -> None:
     paths = Paths(load_config(a.config, []))
     out = Path(a.out)
 
-    stores = sorted(s for sp in a.splits for s in (paths.results_dir / "predictions").glob(f"*/{sp}.zarr"))
+    pred = paths.results_dir / "predictions"
+    stores = sorted(s for sp in a.splits for s in pred.glob(f"*/{sp}.zarr"))
     if not stores:
         sys.exit("no prediction stores found")
     times = sorted({t for s in stores for t in xr.open_zarr(s)["time"].values})
@@ -46,16 +48,20 @@ def main() -> None:
         y.chunk({"time": 1}).to_zarr(y_sub, mode="w")
         entries = [(y_sub, Path("data/processed/Y_degC.zarr"))]
         entries += [(s, s.relative_to(ROOT)) for s in stores]
-        entries += [(paths.metrics_dir / sp, (paths.metrics_dir / sp).relative_to(ROOT)) for sp in a.splits
-                    if (paths.metrics_dir / sp).exists()]  # fmt: skip
+        for sp in a.splits:
+            m = paths.metrics_dir / sp
+            if m.exists():
+                entries.append((m, m.relative_to(ROOT)))
         part = out.with_suffix(".zip.part")
-        with zipfile.ZipFile(part, "w", zipfile.ZIP_STORED) as z:  # zarr chunks are compressed already
+        with zipfile.ZipFile(part, "w", zipfile.ZIP_STORED) as z:  # chunks already compressed
             for src, arc in entries:
                 for f in sorted(src.rglob("*")) if src.is_dir() else [src]:
                     if f.is_file():
-                        z.write(f, (arc / f.relative_to(src)).as_posix() if src.is_dir() else arc.as_posix())
+                        name = arc / f.relative_to(src) if src.is_dir() else arc
+                        z.write(f, name.as_posix())
         shutil.move(part, out)
-    print(f"wrote {out} ({out.stat().st_size / 1e6:.0f} MB, {len(times)} days, {len(stores)} stores)")
+    mb = out.stat().st_size / 1e6
+    print(f"wrote {out} ({mb:.0f} MB, {len(times)} days, {len(stores)} stores)")
 
 
 if __name__ == "__main__":
