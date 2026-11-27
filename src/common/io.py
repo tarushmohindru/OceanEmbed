@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
 import platform
 import re
 import shutil
 import socket
+import tempfile
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -57,6 +59,24 @@ def atomic_write_path(final: Path) -> Iterator[Path]:
         raise
 
 
+@contextlib.contextmanager
+def local_scratch(final: Path) -> Iterator[Path]:
+    """Yield a path on fast local disk for building ``final``; move it into place afterwards.
+
+    HDF5/zarr issue many small writes, which crawl on network/FUSE mounts such as Lightning's
+    ``/teamspace/studios/this_studio``. Set ``OCEANEMBED_LOCAL_TMP`` to choose the directory.
+    """
+    final = Path(final)
+    with tempfile.TemporaryDirectory(prefix="oe_", dir=os.environ.get("OCEANEMBED_LOCAL_TMP")) as d:
+        local = Path(d) / final.name
+        yield local
+        with atomic_write_path(final) as tmp:
+            if local.is_dir():
+                shutil.copytree(local, tmp)
+            else:
+                shutil.copyfile(local, tmp)
+
+
 def write_netcdf(ds: xr.Dataset, path: Path) -> None:
     """Write NetCDF4 with zlib level 4 on float variables, atomically.
 
@@ -75,13 +95,13 @@ def write_netcdf(ds: xr.Dataset, path: Path) -> None:
         ds[v].encoding.pop("chunksizes", None)
         ds[v].encoding.pop("preferred_chunks", None)
         ds[v].encoding.pop("contiguous", None)
-    with atomic_write_path(path) as tmp:
+    with local_scratch(path) as tmp:
         ds.to_netcdf(tmp, engine="netcdf4", format="NETCDF4", encoding=enc)
 
 
 def write_zarr(ds: xr.Dataset, path: Path, chunks: dict) -> None:
     """Write ``ds`` chunked as ``chunks`` through ``Dataset.to_zarr``, atomically."""
-    with atomic_write_path(path) as tmp:
+    with local_scratch(path) as tmp:
         ds.chunk(chunks).to_zarr(tmp, mode="w")
 
 
