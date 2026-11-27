@@ -131,15 +131,21 @@ def crop_to_bbox(ds: xr.Dataset, bbox: tuple[float, float, float, float]) -> xr.
 def concat_daily(files: list[Path], out: Path, product: str, stream: str) -> None:
     """Concatenate cropped files on ``time`` (later files win duplicates), write, delete inputs.
 
-    Lazy (dask, one chunk per input file) so a GLORYS year (several GB decoded) never sits in
-    memory at once; reordering only happens when the inputs overlap or are out of order.
+    Values are copied *without decoding* (``mask_and_scale=False``): packed int16 GLORYS stays
+    int16 with its scale/offset/fill attributes, which is lossless, ~4x smaller in memory than
+    decoded float64 and fast to recompress. One merge runs at a time across processes (lock).
     """
     if not files:
         raise ValueError("concat_daily: no input files")
-    parts = [xr.open_dataset(f, chunks={"time": -1}) for f in files]
-    try:
+    lock = Path(files[0]).parent / "_concat"
+    with file_lock(lock, timeout_s=4 * 3600.0, stale_s=4 * 3600.0):
+        parts = []
+        for f in files:
+            with xr.open_dataset(f, mask_and_scale=False) as d:
+                parts.append(d.load())
         ds = xr.concat(parts, dim="time", data_vars="minimal", coords="minimal",
-                       compat="override", join="override")  # fmt: skip
+                       compat="override", join="override", combine_attrs="override")  # fmt: skip
+        del parts
         idx = ds.indexes["time"]
         if not (idx.is_monotonic_increasing and idx.is_unique):
             order = np.argsort(idx.values, kind="stable")  # later input stays last among equals
@@ -147,10 +153,7 @@ def concat_daily(files: list[Path], out: Path, product: str, stream: str) -> Non
             keep = ~ds.indexes["time"].duplicated(keep="last")
             ds = ds.isel(time=np.flatnonzero(keep))
         ds.attrs.update({"product": product, "stream": stream})
-        write_netcdf(ds, out)
-    finally:
-        for d in parts:
-            d.close()
+        write_netcdf(ds, out, complevel=1)
     for f in files:
         Path(f).unlink()
 

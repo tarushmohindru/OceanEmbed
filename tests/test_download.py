@@ -400,3 +400,35 @@ def test_smap_like_granule_without_time_axis(tmp_path):
     with xr.open_dataset(out) as r:
         assert r["sss_smap"].dims == ("time", "lat", "lon")
         assert pd.Timestamp(r.time.values[0]) == day
+
+
+def test_concat_daily_keeps_packed_int16_lossless(tmp_path):
+    import numpy as np
+    import pandas as pd
+    import xarray as xr
+
+    from src.download.common import concat_daily
+
+    rng = np.random.default_rng(0)
+    files = []
+    for m, n in ((1, 3), (2, 2)):
+        t = pd.date_range(f"2018-0{m}-01", periods=n)
+        v = (20 + rng.standard_normal((n, 2, 3, 4))).astype("f8")
+        v[0, 0, 0, 0] = np.nan
+        ds = xr.Dataset({"thetao": (("time", "depth", "latitude", "longitude"), v)},
+                        coords={"time": t, "depth": [0.5, 10.0], "latitude": [1.0, 2, 3],
+                                "longitude": [1.0, 2, 3, 4]})  # fmt: skip
+        f = tmp_path / f"g_{m}.nc"
+        ds.to_netcdf(f, encoding={"thetao": {"dtype": "int16", "scale_factor": 0.001,
+                                             "add_offset": 20.0, "_FillValue": -32767}})  # fmt: skip
+        files.append(f)
+    expected = xr.concat([xr.open_dataset(f).load() for f in files], "time")
+    out = tmp_path / "year.nc"
+    concat_daily(files, out, "glorys", "my")
+    with xr.open_dataset(out) as r:
+        assert r.sizes["time"] == 5
+        np.testing.assert_allclose(r.thetao.values, expected.thetao.values, equal_nan=True)
+        assert np.isnan(r.thetao.values[0, 0, 0, 0])
+    with xr.open_dataset(out, mask_and_scale=False) as raw:
+        assert raw.thetao.dtype == np.int16
+    assert not any(f.exists() for f in files)
