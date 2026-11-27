@@ -13,6 +13,7 @@ from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import xarray as xr
 
@@ -128,19 +129,25 @@ def crop_to_bbox(ds: xr.Dataset, bbox: tuple[float, float, float, float]) -> xr.
 
 
 def concat_daily(files: list[Path], out: Path, product: str, stream: str) -> None:
-    """Concatenate cropped files on ``time`` (later files win duplicates), write, delete inputs."""
+    """Concatenate cropped files on ``time`` (later files win duplicates), write, delete inputs.
+
+    Lazy (dask, one day per chunk) so a GLORYS year (several GB decoded) never sits in memory.
+    """
     if not files:
         raise ValueError("concat_daily: no input files")
-    parts = []
-    for f in files:
-        with xr.open_dataset(f) as d:
-            parts.append(d.load())
-    ds = xr.concat(parts, dim="time", data_vars="minimal", coords="minimal", compat="override")
-    ds = ds.sortby("time")  # stable, so among equal times the later input stays last
-    keep = ~ds.indexes["time"].duplicated(keep="last")
-    ds = ds.isel(time=keep)
-    ds.attrs.update({"product": product, "stream": stream})
-    write_netcdf(ds, out)
+    parts = [xr.open_dataset(f, chunks={"time": 1}) for f in files]
+    try:
+        ds = xr.concat(parts, dim="time", data_vars="minimal", coords="minimal",
+                       compat="override", join="override")  # fmt: skip
+        order = np.argsort(ds.indexes["time"].values, kind="stable")
+        ds = ds.isel(time=order)  # stable: among equal times the later input stays last
+        keep = ~ds.indexes["time"].duplicated(keep="last")
+        ds = ds.isel(time=np.flatnonzero(keep))
+        ds.attrs.update({"product": product, "stream": stream})
+        write_netcdf(ds, out)
+    finally:
+        for d in parts:
+            d.close()
     for f in files:
         Path(f).unlink()
 
