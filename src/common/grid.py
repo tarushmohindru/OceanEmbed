@@ -15,14 +15,15 @@ _EARTH_RADIUS_KM = 6371.0
 def regular_bounds(centres: np.ndarray) -> np.ndarray:
     """Cell edges (N+1,) for a regular 1-D grid of centres (N,).
 
-    Raises ``ValueError`` if the spacing is not uniform (relative tolerance 1e-6).
+    Raises ``ValueError`` if the spacing is not uniform (relative tolerance 1e-3, which
+    tolerates float32 coordinates such as GLORYS 1/12 deg near 100E).
     """
     c = np.asarray(centres, dtype="float64")
     if c.ndim != 1 or c.size < 2:
         raise ValueError("need a 1-D array with at least 2 centres")
     d = np.diff(c)
     step = d.mean()
-    if step == 0 or np.any(np.abs(d - step) > 1e-6 * abs(step)):
+    if step == 0 or np.any(np.abs(d - step) > 1e-3 * abs(step)):
         raise ValueError("grid spacing is not uniform")
     mids = 0.5 * (c[:-1] + c[1:])
     return np.concatenate([[c[0] - step / 2], mids, [c[-1] + step / 2]])
